@@ -81,13 +81,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const register = useCallback(async (firstName: string, lastName: string, email: string, password: string) => {
+  const register = useCallback(async (
+    firstName: string, 
+    lastName: string, 
+    email: string, 
+    password: string,
+    role: 'student' | 'vendor',
+    roleDetails?: {
+      studentDetails?: {
+        studentId: string;
+        university: string;
+      };
+      businessDetails?: {
+        businessName: string;
+        description: string;
+        address: string;
+      };
+    }
+  ) => {
     try {
       const response = await api.post('/auth/register', {
         firstName,
         lastName,
         email,
         password,
+        role,
+        ...(role === 'student' && { studentDetails: roleDetails?.studentDetails }),
+        ...(role === 'vendor' && { businessDetails: roleDetails?.businessDetails })
       });
       
       const { user, accessToken } = response.data;

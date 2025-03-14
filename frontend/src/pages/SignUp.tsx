@@ -169,12 +169,39 @@ export default function SignUp() {
         studentDetailsSchema.parse(formData);
       }
 
-      // Register using auth context with basic info
+      // Prepare role-specific details
+      const roleDetails = selectedRole === 'vendor' 
+        ? {
+            businessDetails: {
+              businessName: formData.businessName,
+              description: formData.description,
+              address: formData.address,
+              category: formData.category,
+              contactEmail: formData.contactEmail,
+              contactPhone: formData.contactPhone,
+              businessType: formData.businessType,
+              openingHours: formData.openingHours,
+              closingHours: formData.closingHours
+            }
+          }
+        : {
+            studentDetails: {
+              studentId: formData.studentId,
+              studentEmail: formData.studentEmail,
+              university: formData.university,
+              course: formData.course,
+              year: formData.year
+            }
+          };
+
+      // Register using auth context with all required info
       await register(
         formData.firstName,
         formData.lastName,
         formData.email,
-        formData.password
+        formData.password,
+        selectedRole as 'student' | 'vendor', // We know it's defined at this point
+        roleDetails
       );
 
       // Show success toast
