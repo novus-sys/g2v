@@ -8,15 +8,15 @@ const getApiUrl = () => {
     return 'https://your-backend-url.vercel.app/api';
   }
   
-  // In development, use the local IP/hostname
-  const hostname = window.location.hostname;
-  return `http://${hostname}:5000/api`;
+  // In development, always use localhost:5000
+  return 'http://localhost:5000/api';
 };
 
 const api = axios.create({
   baseURL: getApiUrl(),
   headers: {
     'Content-Type': 'application/json',
+    'Accept': 'application/json'
   },
   withCredentials: true,
 });
