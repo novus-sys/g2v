@@ -1,116 +1,50 @@
-
-import React from "react";
-import { GroupBuy, Business, Product } from "../types";
-import { Users, Clock } from "lucide-react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { Users, Clock, Plus, Search, Filter, Loader2 } from "lucide-react";
+import axios from "../lib/axios";
+import { useAuth } from "../hooks/useAuth";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import { useToast } from "../components/ui/use-toast";
 
-// Mock data - same as in GroupBuying.tsx
-const ACTIVE_GROUP_BUYS: (GroupBuy & { business: Business, product: Product })[] = [
-  {
-    id: "1",
-    businessId: "1",
-    productId: "p1",
-    targetParticipants: 10,
-    currentParticipants: 7,
-    discountPercentage: 15,
-    expiresAt: "2023-07-15T12:00:00Z",
-    status: "active",
-    business: {
-      id: "1",
-      name: "Campus Coffee",
-      description: "Artisanal coffee and pastries",
-      category: "Food & Drinks",
-      imageUrl: "https://images.unsplash.com/photo-1559925393-8be0ec4767c8?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
-      rating: 4.8,
-      reviewCount: 124,
-      tags: ["Coffee", "Breakfast"],
-      deliveryTime: "15-20 min",
-      isGroupBuyingEnabled: true,
-      groupBuyingDiscount: 15
-    },
-    product: {
-      id: "p1",
-      businessId: "1",
-      name: "Coffee Package Deal",
-      description: "A month of premium coffee beans",
-      price: 50,
-      imageUrl: "https://images.unsplash.com/photo-1611854779393-1b2da9d400fe?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
-      isAvailable: true,
-      category: "Packages"
-    }
-  },
-  {
-    id: "2",
-    businessId: "2",
-    productId: "p2",
-    targetParticipants: 5,
-    currentParticipants: 3,
-    discountPercentage: 20,
-    expiresAt: "2023-07-18T12:00:00Z",
-    status: "active",
-    business: {
-      id: "2",
-      name: "Tech Tutors",
-      description: "One-on-one tutoring",
-      category: "Services",
-      imageUrl: "https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
-      rating: 4.9,
-      reviewCount: 87,
-      tags: ["Tutoring", "Tech"],
-      deliveryTime: "Schedule",
-      isGroupBuyingEnabled: true,
-      groupBuyingDiscount: 20
-    },
-    product: {
-      id: "p2",
-      businessId: "2",
-      name: "Group Coding Session",
-      description: "3-hour coding workshop for beginners",
-      price: 75,
-      imageUrl: "https://images.unsplash.com/photo-1623479322729-28b25c16b011?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
-      isAvailable: true,
-      category: "Workshops"
-    }
-  },
-  {
-    id: "3",
-    businessId: "3",
-    productId: "p3",
-    targetParticipants: 8,
-    currentParticipants: 5,
-    discountPercentage: 15,
-    expiresAt: "2023-07-20T12:00:00Z",
-    status: "active",
-    business: {
-      id: "3",
-      name: "Campus Books",
-      description: "New and used textbooks",
-      category: "Retail",
-      imageUrl: "https://images.unsplash.com/photo-1507842217343-583bb7270b66?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
-      rating: 4.5,
-      reviewCount: 93,
-      tags: ["Books", "Study"],
-      deliveryTime: "1-2 days",
-      isGroupBuyingEnabled: true,
-      groupBuyingDiscount: 15
-    },
-    product: {
-      id: "p3",
-      businessId: "3",
-      name: "Semester Textbook Bundle",
-      description: "All required textbooks for Computer Science",
-      price: 300,
-      imageUrl: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80",
-      isAvailable: true,
-      category: "Bundles"
-    }
-  }
-];
+interface Group {
+  _id: string;
+  name: string;
+  description: string;
+  creator: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  members: Array<{
+    _id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  }>;
+  maxMembers: number;
+  status: 'open' | 'closed' | 'completed';
+  category: string;
+  targetAmount: number;
+  currentAmount: number;
+  expiryDate: string;
+  image?: string;
+  rules: string[];
+  createdAt: string;
+  updatedAt: string;
+}
 
-// Helper function from GroupBuying.tsx
-function getRemainingTimeLabel(expiresAt: string): string {
+function getRemainingTimeLabel(expiryDate: string): string {
   const now = new Date();
-  const expiry = new Date(expiresAt);
+  const expiry = new Date(expiryDate);
   const diffMs = expiry.getTime() - now.getTime();
   
   if (diffMs <= 0) return "Expired";
@@ -131,23 +65,150 @@ function getRemainingTimeLabel(expiresAt: string): string {
 }
 
 const Groups: React.FC = () => {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+
+  // Fetch groups from API
+  useEffect(() => {
+    const fetchGroups = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await axios.get('/api/groups');
+        setGroups(response.data);
+      } catch (err) {
+        setError('Failed to fetch groups. Please try again later.');
+        toast({
+          title: "Error",
+          description: "Failed to fetch groups. Please try again later.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchGroups();
+  }, [toast]);
+
+  // Filter and search groups
+  const filteredGroups = groups.filter(group => {
+    const matchesSearch = 
+      group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      group.description.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === "all" || group.status === statusFilter;
+    const matchesCategory = categoryFilter === "all" || group.category === categoryFilter;
+
+    return matchesSearch && matchesStatus && matchesCategory;
+  });
+
+  // Get unique categories for filter
+  const categories = Array.from(new Set(groups.map(group => group.category)));
+
   return (
     <div className="container px-4 py-6 max-w-screen-xl mx-auto mb-20">
-      <h1 className="text-2xl font-bold mb-6">Active Group Buys</h1>
-      
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Groups</h1>
+        <Link to="/groups/create">
+          <Button className="bg-gantry-purple hover:bg-gantry-purple-dark">
+            <Plus className="w-4 h-4 mr-2" /> Create Group
+          </Button>
+        </Link>
+      </div>
+
+      <div className="bg-white rounded-2xl p-4 mb-6 border border-gantry-gray/20 shadow-sm">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Input
+                type="text"
+                placeholder="Search groups..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+          
+          <div className="flex gap-4">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="open">Open</SelectItem>
+                <SelectItem value="closed">Closed</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map(category => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-gantry-purple" />
+        </div>
+      ) : error ? (
+        <div className="text-center py-12 bg-white rounded-2xl shadow-sm border border-gantry-gray/20">
+          <div className="text-red-500 mb-4">⚠️</div>
+          <h3 className="text-xl font-medium text-gray-700 mb-2">Error Loading Groups</h3>
+          <p className="text-gray-500">{error}</p>
+        </div>
+      ) : filteredGroups.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-2xl shadow-sm border border-gantry-gray/20">
+          <Users className="w-12 h-12 mx-auto text-gantry-purple/50 mb-4" />
+          <h3 className="text-xl font-medium text-gray-700 mb-2">No groups found</h3>
+          <p className="text-gray-500 mb-4">
+            {searchTerm || statusFilter !== "all" || categoryFilter !== "all"
+              ? "Try adjusting your filters"
+              : "Start by creating a new group"}
+          </p>
+          {!searchTerm && statusFilter === "all" && categoryFilter === "all" && (
+            <Link to="/groups/create">
+              <Button className="bg-gantry-purple hover:bg-gantry-purple-dark">
+                <Plus className="w-4 h-4 mr-2" /> Create First Group
+              </Button>
+            </Link>
+          )}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 gap-6">
-        {ACTIVE_GROUP_BUYS.map((groupBuy) => (
+          {filteredGroups.map((group) => (
           <Link 
-            key={groupBuy.id}
-            to={`/groups/${groupBuy.id}`}
+              key={group._id}
+              to={`/groups/${group._id}`}
             className="block"
           >
-            <div className="bg-white rounded-2xl overflow-hidden border border-gantry-gray/20 shadow-sm hover:shadow-md transition-all-300 hover:-translate-y-1">
+              <div className="bg-white rounded-2xl overflow-hidden border border-gantry-gray/20 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
               <div className="flex flex-col sm:flex-row">
                 <div className="w-full sm:w-1/4 h-48 sm:h-auto">
                   <img 
-                    src={groupBuy.product.imageUrl} 
-                    alt={groupBuy.product.name}
+                      src={group.image || 'https://via.placeholder.com/400x300?text=No+Image'} 
+                      alt={group.name}
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -155,49 +216,58 @@ const Groups: React.FC = () => {
                 <div className="flex-1 p-6">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <h3 className="font-semibold text-lg">{groupBuy.product.name}</h3>
-                      <p className="text-gantry-gray-dark">{groupBuy.business.name}</p>
-                      <p className="mt-2">{groupBuy.product.description}</p>
-                    </div>
-                    
-                    <div className="bg-gantry-purple/10 text-gantry-purple px-3 py-1.5 rounded-full text-sm font-medium">
-                      {groupBuy.discountPercentage}% Off
-                    </div>
+                        <h3 className="font-semibold text-lg">{group.name}</h3>
+                        <p className="text-gantry-gray-dark">Created by {group.creator.firstName} {group.creator.lastName}</p>
+                        <p className="mt-2">{group.description}</p>
+                      </div>
+                      
+                      <div className={`px-3 py-1.5 rounded-full text-sm font-medium ${
+                        group.status === 'open' 
+                          ? 'bg-green-100 text-green-800'
+                          : group.status === 'completed'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {group.status.charAt(0).toUpperCase() + group.status.slice(1)}
+                      </div>
                   </div>
                   
                   <div className="flex items-center justify-between my-4">
                     <div className="flex items-center text-gantry-gray-dark">
                       <Users className="w-4 h-4 mr-1" />
-                      <span>{groupBuy.currentParticipants}/{groupBuy.targetParticipants} participants</span>
+                        <span>{group.members.length}/{group.maxMembers} members</span>
                     </div>
                     
                     <div className="flex items-center text-gantry-gray-dark">
                       <Clock className="w-4 h-4 mr-1" />
-                      <span>{getRemainingTimeLabel(groupBuy.expiresAt)}</span>
-                    </div>
+                        <span>{getRemainingTimeLabel(group.expiryDate)}</span>
+                      </div>
                   </div>
                   
                   <div className="mt-2">
                     <div className="w-full bg-gantry-gray rounded-full h-2">
                       <div 
                         className="bg-gantry-purple h-2 rounded-full transition-all duration-1000 ease-in-out" 
-                        style={{ width: `${(groupBuy.currentParticipants / groupBuy.targetParticipants) * 100}%` }}
+                          style={{ width: `${(group.currentAmount / group.targetAmount) * 100}%` }}
                       ></div>
                     </div>
                   </div>
                   
                   <div className="mt-4 flex justify-between items-center">
                     <div>
-                      <span className="text-sm text-gantry-gray-dark">Original price: </span>
-                      <span className="text-sm line-through">${groupBuy.product.price}</span>
-                      <span className="ml-2 text-lg font-bold text-gantry-purple">
-                        ${(groupBuy.product.price * (1 - groupBuy.discountPercentage / 100)).toFixed(2)}
+                        <span className="text-lg font-bold text-gantry-purple">
+                          ${group.currentAmount.toFixed(2)}
+                        </span>
+                        <span className="text-sm text-gantry-gray-dark ml-1">
+                          of ${group.targetAmount.toFixed(2)}
                       </span>
                     </div>
                     
+                      {group.status === 'open' && (
                     <div className="text-gantry-purple-light text-sm font-medium">
-                      {groupBuy.targetParticipants - groupBuy.currentParticipants} more needed for discount
-                    </div>
+                          ${(group.targetAmount - group.currentAmount).toFixed(2)} more to reach target
+                        </div>
+                      )}
                   </div>
                 </div>
               </div>
@@ -205,6 +275,7 @@ const Groups: React.FC = () => {
           </Link>
         ))}
       </div>
+      )}
     </div>
   );
 };

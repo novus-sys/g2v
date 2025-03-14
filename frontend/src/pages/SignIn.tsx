@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { z } from 'zod';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { toast } from '@/hooks/use-toast';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email format'),
@@ -43,6 +46,12 @@ export default function SignIn() {
       // Login using auth context
       await login(formData.email, formData.password);
 
+      // Show success toast
+      toast({
+        title: "Welcome back!",
+        description: "You have successfully signed in.",
+      });
+
       // Redirect to dashboard on success
       navigate('/dashboard');
     } catch (error: any) {
@@ -65,99 +74,106 @@ export default function SignIn() {
           submit: error.message || 'An error occurred during sign in. Please try again.'
         });
       }
+
+      // Show error toast
+      toast({
+        title: "Sign in failed",
+        description: "Please check your credentials and try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to your account
-          </h2>
-        </div>
-
-        {registrationMessage && (
-          <div className="rounded-md bg-green-50 p-4">
-            <div className="flex">
-              <div className="ml-3">
-                <p className="text-sm font-medium text-green-800">
-                  {registrationMessage}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="email" className="sr-only">Email address</label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
-                value={formData.email}
-                onChange={handleChange}
-              />
-              {errors.email && (
-                <p className="text-red-500 text-xs mt-1">{errors.email}</p>
-              )}
-            </div>
-            <div>
-              <label htmlFor="password" className="sr-only">Password</label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
-                value={formData.password}
-                onChange={handleChange}
-              />
-              {errors.password && (
-                <p className="text-red-500 text-xs mt-1">{errors.password}</p>
-              )}
-            </div>
+    <div className="min-h-screen flex items-center justify-center bg-gantry-gray-light py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full">
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gantry-gray/20">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-gray-900">
+              Welcome back
+            </h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Sign in to your account to continue
+            </p>
           </div>
 
-          {errors.submit && (
-            <div className="rounded-md bg-red-50 p-4">
-              <div className="flex">
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">
-                    Sign in failed
-                  </h3>
-                  <p className="text-sm text-red-700 mt-2">
-                    {errors.submit}
-                  </p>
-                </div>
-              </div>
+          {registrationMessage && (
+            <div className="mb-6 p-4 bg-green-50 rounded-lg">
+              <p className="text-sm text-green-800 font-medium">
+                {registrationMessage}
+              </p>
             </div>
           )}
 
-          <div>
-            <button
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email address
+                </label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  placeholder="Enter your email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  className={errors.email ? "border-red-500" : ""}
+                />
+                {errors.email && (
+                  <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  Password
+                </label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  placeholder="Enter your password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  className={errors.password ? "border-red-500" : ""}
+                />
+                {errors.password && (
+                  <p className="mt-1 text-sm text-red-600">{errors.password}</p>
+                )}
+              </div>
+            </div>
+
+            {errors.submit && (
+              <div className="p-4 bg-red-50 rounded-lg">
+                <p className="text-sm text-red-800 font-medium">
+                  {errors.submit}
+                </p>
+              </div>
+            )}
+
+            <Button
               type="submit"
               disabled={isLoading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              className="w-full bg-gantry-purple hover:bg-gantry-purple-dark"
             >
               {isLoading ? 'Signing in...' : 'Sign in'}
-            </button>
-          </div>
+            </Button>
 
-          <div className="text-sm text-center">
-            <Link to="/signup" className="font-medium text-indigo-600 hover:text-indigo-500">
-              Don't have an account? Sign up
-            </Link>
-          </div>
-        </form>
+            <div className="text-center">
+              <Link 
+                to="/signup" 
+                className="text-sm font-medium text-gantry-purple hover:text-gantry-purple-dark"
+              >
+                Don't have an account? Sign up
+              </Link>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
