@@ -1,25 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { User } from '../models/User';
+import User from '../models/User';
 import { ValidationError } from '../utils/errors';
-import { Document } from 'mongoose';
+import mongoose from 'mongoose';
 
-interface IUser extends Document {
-  _id: string;
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  comparePassword(candidatePassword: string): Promise<boolean>;
-}
-
-const generateTokens = (userId: string) => {
-  const accessToken = jwt.sign({ userId }, process.env.JWT_SECRET || 'your-secret-key', {
+const generateTokens = (userId: mongoose.Types.ObjectId) => {
+  const accessToken = jwt.sign({ userId: userId.toString() }, process.env.JWT_SECRET || 'your-secret-key', {
     expiresIn: '15m',
   });
 
-  const refreshToken = jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key', {
+  const refreshToken = jwt.sign({ userId: userId.toString() }, process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key', {
     expiresIn: '7d',
   });
 
@@ -43,12 +33,12 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
       password, // Don't hash here, let the mongoose middleware handle it
       firstName,
       lastName,
-    }) as IUser;
+    });
 
     console.log('User created successfully:', user.email);
 
     // Generate tokens
-    const { accessToken, refreshToken } = generateTokens(user._id.toString());
+    const { accessToken, refreshToken } = generateTokens(user._id);
 
     // Return user data and tokens
     res.status(201).json({
@@ -73,7 +63,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     console.log('Login attempt for email:', email);
 
     // Find user with password
-    const user = await User.findOne({ email }) as IUser;
+    const user = await User.findOne({ email });
     if (!user) {
       console.log('User not found with email:', email);
       throw new ValidationError('Invalid email or password');
@@ -89,7 +79,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     }
 
     // Generate tokens
-    const { accessToken, refreshToken } = generateTokens(user._id.toString());
+    const { accessToken, refreshToken } = generateTokens(user._id);
 
     // Return user data and tokens
     res.json({
@@ -120,7 +110,7 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key') as { userId: string };
     
     // Find user
-    const user = await User.findById(decoded.userId) as IUser;
+    const user = await User.findById(decoded.userId);
     if (!user) {
       throw new ValidationError('User not found');
     }
