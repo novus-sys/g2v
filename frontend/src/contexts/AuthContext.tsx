@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
-import axios from '../lib/axios';
+import api from '@/lib/axios';
 import { User, AuthState, AuthContextType } from '../types/auth';
 
 type AuthAction =
@@ -65,13 +65,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = useCallback(async (email: string, password: string) => {
     try {
-      const response = await axios.post('/api/auth/login', { email, password });
+      const response = await api.post('/auth/login', {
+        email,
+        password,
+      });
+      
       const { user, accessToken } = response.data;
       
       dispatch({ type: 'LOGIN_SUCCESS', payload: { user, accessToken } });
-      
-      // Set the token in axios defaults
-      axios.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
       
       // Store token in localStorage
       localStorage.setItem('accessToken', accessToken);
@@ -82,7 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = useCallback(async (firstName: string, lastName: string, email: string, password: string) => {
     try {
-      const response = await axios.post('/api/auth/register', {
+      const response = await api.post('/auth/register', {
         firstName,
         lastName,
         email,
@@ -92,9 +93,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { user, accessToken } = response.data;
       
       dispatch({ type: 'REGISTER_SUCCESS', payload: { user, accessToken } });
-      
-      // Set the token in axios defaults
-      axios.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
       
       // Store token in localStorage
       localStorage.setItem('accessToken', accessToken);
@@ -106,9 +104,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = useCallback(() => {
     // Remove token from localStorage
     localStorage.removeItem('accessToken');
-    
-    // Remove token from axios defaults
-    delete axios.defaults.headers.common['Authorization'];
     
     dispatch({ type: 'LOGOUT' });
   }, []);
@@ -124,11 +119,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (token) {
         try {
-          // Set the token in axios defaults
-          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          
           // Fetch current user
-          const response = await axios.get('/api/auth/me');
+          const response = await api.get('/auth/me');
           const user = response.data;
           
           dispatch({
