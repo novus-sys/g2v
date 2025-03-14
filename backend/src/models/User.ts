@@ -7,12 +7,34 @@ export interface IUser extends Document {
   password: string;
   firstName: string;
   lastName: string;
-  role: 'user' | 'admin' | 'business';
+  role: 'student' | 'vendor' | 'admin';
   avatar?: string;
   isEmailVerified: boolean;
   points: number;
   level: number;
   phone?: string;
+  // Student specific fields
+  studentDetails?: {
+    studentId: string;
+    studentEmail: string;
+    university: string;
+    course?: string;
+    year?: string;
+  };
+  // Vendor specific fields
+  businessDetails?: {
+    businessName: string;
+    description: string;
+    address: string;
+    category: string;
+    contactEmail: string;
+    contactPhone: string;
+    businessType: string;
+    openingHours: string;
+    closingHours: string;
+    logo?: string;
+    coverImage?: string;
+  };
   address?: {
     street: string;
     city: string;
@@ -53,8 +75,8 @@ const userSchema = new Schema<IUser>(
     },
     role: {
       type: String,
-      enum: ['user', 'admin', 'business'],
-      default: 'user',
+      enum: ['student', 'vendor', 'admin'],
+      default: 'student',
     },
     avatar: {
       type: String,
@@ -75,6 +97,34 @@ const userSchema = new Schema<IUser>(
       type: String,
       trim: true,
     },
+    studentDetails: {
+      studentId: String,
+      studentEmail: {
+        type: String,
+        trim: true,
+        lowercase: true,
+      },
+      university: String,
+      course: String,
+      year: String,
+    },
+    businessDetails: {
+      businessName: String,
+      description: String,
+      address: String,
+      category: String,
+      contactEmail: {
+        type: String,
+        trim: true,
+        lowercase: true,
+      },
+      contactPhone: String,
+      businessType: String,
+      openingHours: String,
+      closingHours: String,
+      logo: String,
+      coverImage: String,
+    },
     address: {
       street: String,
       city: String,
@@ -92,6 +142,9 @@ const userSchema = new Schema<IUser>(
 
 // Indexes for efficient queries
 userSchema.index({ role: 1 });
+userSchema.index({ 'businessDetails.businessName': 1 });
+userSchema.index({ 'studentDetails.studentId': 1 });
+userSchema.index({ 'studentDetails.university': 1 });
 
 // Hash password before saving
 userSchema.pre('save', async function (next) {

@@ -18,8 +18,19 @@ const generateTokens = (userId: mongoose.Types.ObjectId) => {
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { email, password, firstName, lastName } = req.body;
-    console.log('Registration attempt for:', email);
+    const { 
+      email, 
+      password, 
+      firstName, 
+      lastName,
+      role,
+      // Student specific fields
+      studentDetails,
+      // Vendor specific fields
+      businessDetails
+    } = req.body;
+    
+    console.log('Registration attempt for:', email, 'with role:', role);
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -27,13 +38,28 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
       throw new ValidationError('Email already registered');
     }
 
-    // Create new user (password will be hashed by the pre-save middleware)
-    const user = await User.create({
+    // Validate role-specific details
+    if (role === 'student' && !studentDetails) {
+      throw new ValidationError('Student details are required');
+    }
+
+    if (role === 'vendor' && !businessDetails) {
+      throw new ValidationError('Business details are required');
+    }
+
+    // Create new user with role-specific details
+    const userData = {
       email,
-      password, // Don't hash here, let the mongoose middleware handle it
+      password,
       firstName,
       lastName,
-    });
+      role,
+      ...(role === 'student' && { studentDetails }),
+      ...(role === 'vendor' && { businessDetails })
+    };
+
+    // Create new user (password will be hashed by the pre-save middleware)
+    const user = await User.create(userData);
 
     console.log('User created successfully:', user.email);
 
@@ -47,6 +73,9 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        role: user.role,
+        ...(user.role === 'student' && { studentDetails: user.studentDetails }),
+        ...(user.role === 'vendor' && { businessDetails: user.businessDetails })
       },
       accessToken,
       refreshToken,
@@ -81,13 +110,16 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     // Generate tokens
     const { accessToken, refreshToken } = generateTokens(user._id);
 
-    // Return user data and tokens
+    // Return user data and tokens with role-specific details
     res.json({
       user: {
         id: user._id,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        role: user.role,
+        ...(user.role === 'student' && { studentDetails: user.studentDetails }),
+        ...(user.role === 'vendor' && { businessDetails: user.businessDetails })
       },
       accessToken,
       refreshToken,
