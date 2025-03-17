@@ -3,7 +3,7 @@ import { Switch } from "@/components/ui/switch";
 import { useAppContext } from "@/context/AppContext";
 import { ShoppingBag, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 
 export const ModeToggle: React.FC = () => {
   const { userMode, toggleUserMode } = useAppContext();

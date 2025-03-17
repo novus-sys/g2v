@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "./components/ui/toaster";
 import { AppProvider } from "./context/AppContext";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider } from "@/context/AuthContext";
 import { RequireAuth } from "./components/auth/RequireAuth";
 import { Header } from "./components/Header";
 import { Navbar } from "./components/Navbar";

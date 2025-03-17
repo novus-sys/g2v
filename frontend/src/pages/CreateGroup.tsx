@@ -1,243 +1,429 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
-import axios from '../lib/axios';
+import { useAuth } from '@/context/AuthContext';
+import { useToast } from "@/components/ui/use-toast";
+import api from '@/lib/axios';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { X } from 'lucide-react';
 
 interface CreateGroupForm {
   name: string;
   description: string;
-  targetParticipants: number;
+  maxMembers: number;
+  category: string;
+  targetAmount: number;
   expiryDate: string;
-  product: {
-    name: string;
-    price: number;
-    discountPercentage: number;
-  };
+  image?: string;
+  rules: string[];
 }
+
+interface FormErrors {
+  [key: string]: string;
+}
+
+const CATEGORIES = [
+  'Electronics',
+  'Fashion',
+  'Home & Living',
+  'Food & Beverages',
+  'Beauty & Health',
+  'Sports & Outdoors',
+  'Books & Stationery',
+  'Others'
+];
 
 const CreateGroup: React.FC = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<FormErrors>({});
 
   const [formData, setFormData] = useState<CreateGroupForm>({
     name: '',
     description: '',
-    targetParticipants: 2,
+    maxMembers: 2,
+    category: '',
+    targetAmount: 0,
     expiryDate: '',
-    product: {
-      name: '',
-      price: 0,
-      discountPercentage: 0,
-    },
+    image: '',
+    rules: []
   });
+
+  const validateForm = (): FormErrors => {
+    const errors: FormErrors = {};
+
+    // Name validation
+    if (formData.name.length < 3) {
+      errors.name = 'Name must be at least 3 characters long';
+    } else if (formData.name.length > 100) {
+      errors.name = 'Name cannot exceed 100 characters';
+    }
+
+    // Description validation
+    if (formData.description.length < 10) {
+      errors.description = 'Description must be at least 10 characters long';
+    } else if (formData.description.length > 500) {
+      errors.description = 'Description cannot exceed 500 characters';
+    }
+
+    // MaxMembers validation
+    if (formData.maxMembers < 2) {
+      errors.maxMembers = 'Group must allow at least 2 members';
+    } else if (formData.maxMembers > 100) {
+      errors.maxMembers = 'Group cannot exceed 100 members';
+    }
+
+    // Category validation
+    if (!formData.category) {
+      errors.category = 'Category is required';
+    }
+
+    // TargetAmount validation
+    if (formData.targetAmount <= 0) {
+      errors.targetAmount = 'Target amount must be greater than 0';
+    } else if (formData.targetAmount > 1000000) {
+      errors.targetAmount = 'Target amount cannot exceed 1,000,000';
+    }
+
+    // ExpiryDate validation
+    if (!formData.expiryDate) {
+      errors.expiryDate = 'Expiry date is required';
+    } else if (new Date(formData.expiryDate) <= new Date()) {
+      errors.expiryDate = 'Expiry date must be in the future';
+    }
+
+    // Image URL validation (if provided)
+    if (formData.image && !isValidUrl(formData.image)) {
+      errors.image = 'Invalid image URL';
+    }
+
+    // Rules validation
+    if (formData.rules.length > 10) {
+      errors.rules = 'Cannot have more than 10 rules';
+    }
+    if (formData.rules.some(rule => rule.length > 200)) {
+      errors.rules = 'Each rule cannot exceed 200 characters';
+    }
+
+    return errors;
+  };
+
+  const isValidUrl = (url: string): boolean => {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!isAuthenticated) {
-      navigate('/signin', { state: { from: '/groups/create' } });
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      toast({
+        title: "Validation Error",
+        description: "Please check the form for errors",
+        variant: "destructive",
+      });
       return;
     }
 
     try {
       setIsSubmitting(true);
-      setError(null);
+      setErrors({});
       
-      const response = await axios.post('/api/groups', formData);
+      const response = await api.post('/api/groups', formData);
+      
+      toast({
+        title: "Success",
+        description: "Group created successfully",
+      });
+      
       navigate(`/groups/${response.data._id}`);
-    } catch (err) {
-      setError('Failed to create group. Please try again.');
-      console.error('Error creating group:', err);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to create group",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target;
-    if (name.startsWith('product.')) {
-      const productField = name.split('.')[1];
-      setFormData(prev => ({
-        ...prev,
-        product: {
-          ...prev.product,
-          [productField]: value,
-        },
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value,
-      }));
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    // Clear error when field is modified
+    if (errors[name]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
     }
   };
 
+  const handleCategoryChange = (value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      category: value
+    }));
+    if (errors.category) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.category;
+        return newErrors;
+      });
+    }
+  };
+
+  const addRule = () => {
+    if (formData.rules.length >= 10) {
+      setErrors(prev => ({
+        ...prev,
+        rules: 'Cannot have more than 10 rules'
+      }));
+      return;
+    }
+    setFormData(prev => ({
+      ...prev,
+      rules: [...prev.rules, '']
+    }));
+  };
+
+  const removeRule = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      rules: prev.rules.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateRule = (index: number, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      rules: prev.rules.map((rule, i) => i === index ? value : rule)
+    }));
+  };
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="md:grid md:grid-cols-3 md:gap-6">
-        <div className="md:col-span-1">
-          <div className="px-4 sm:px-0">
-            <h3 className="text-lg font-medium leading-6 text-gray-900">Create a New Group</h3>
-            <p className="mt-1 text-sm text-gray-600">
-              Fill in the details below to start a new group buy. Others will be able to join your group
-              until it reaches the target number of participants or expires.
-            </p>
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <h1 className="text-2xl font-semibold mb-6">Create a New Group</h1>
+        
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Name Input */}
+          <div>
+            <label htmlFor="name" className="block text-sm font-medium mb-1">
+              Group Name
+            </label>
+            <Input
+              id="name"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              className={errors.name ? "border-red-500" : ""}
+              placeholder="Enter group name"
+              maxLength={100}
+            />
+            {errors.name && (
+              <p className="text-sm text-red-500 mt-1">{errors.name}</p>
+            )}
           </div>
-        </div>
 
-        <div className="mt-5 md:mt-0 md:col-span-2">
-          <form onSubmit={handleSubmit}>
-            <div className="shadow sm:rounded-md sm:overflow-hidden">
-              <div className="px-4 py-5 bg-white space-y-6 sm:p-6">
-                {error && (
-                  <div className="rounded-md bg-red-50 p-4">
-                    <div className="text-sm text-red-700">{error}</div>
-                  </div>
-                )}
+          {/* Description Input */}
+          <div>
+            <label htmlFor="description" className="block text-sm font-medium mb-1">
+              Description
+            </label>
+            <Textarea
+              id="description"
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              className={errors.description ? "border-red-500" : ""}
+              placeholder="Describe your group"
+              maxLength={500}
+            />
+            {errors.description && (
+              <p className="text-sm text-red-500 mt-1">{errors.description}</p>
+            )}
+          </div>
 
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                    Group Name
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    id="name"
-                    required
-                    value={formData.name}
-                    onChange={handleChange}
-                    className="mt-1 focus:ring-gantry-blue focus:border-gantry-blue block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                  />
-                </div>
+          {/* Category Select */}
+          <div>
+            <label htmlFor="category" className="block text-sm font-medium mb-1">
+              Category
+            </label>
+            <Select
+              value={formData.category}
+              onValueChange={handleCategoryChange}
+            >
+              <SelectTrigger className={errors.category ? "border-red-500" : ""}>
+                <SelectValue placeholder="Select a category" />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORIES.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.category && (
+              <p className="text-sm text-red-500 mt-1">{errors.category}</p>
+            )}
+          </div>
 
-                <div>
-                  <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                    Description
-                  </label>
-                  <textarea
-                    id="description"
-                    name="description"
-                    rows={3}
-                    required
-                    value={formData.description}
-                    onChange={handleChange}
-                    className="mt-1 focus:ring-gantry-blue focus:border-gantry-blue block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="targetParticipants" className="block text-sm font-medium text-gray-700">
-                      Target Participants
-                    </label>
-                    <input
-                      type="number"
-                      name="targetParticipants"
-                      id="targetParticipants"
-                      min="2"
-                      required
-                      value={formData.targetParticipants}
-                      onChange={handleChange}
-                      className="mt-1 focus:ring-gantry-blue focus:border-gantry-blue block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="expiryDate" className="block text-sm font-medium text-gray-700">
-                      Expiry Date
-                    </label>
-                    <input
-                      type="datetime-local"
-                      name="expiryDate"
-                      id="expiryDate"
-                      required
-                      value={formData.expiryDate}
-                      onChange={handleChange}
-                      className="mt-1 focus:ring-gantry-blue focus:border-gantry-blue block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                    />
-                  </div>
-                </div>
-
-                <div className="border-t border-gray-200 pt-6">
-                  <h4 className="text-sm font-medium text-gray-900">Product Details</h4>
-                  
-                  <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-3">
-                    <div className="sm:col-span-2">
-                      <label htmlFor="product.name" className="block text-sm font-medium text-gray-700">
-                        Product Name
-                      </label>
-                      <input
-                        type="text"
-                        name="product.name"
-                        id="product.name"
-                        required
-                        value={formData.product.name}
-                        onChange={handleChange}
-                        className="mt-1 focus:ring-gantry-blue focus:border-gantry-blue block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="product.price" className="block text-sm font-medium text-gray-700">
-                        Price
-                      </label>
-                      <div className="mt-1 relative rounded-md shadow-sm">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <span className="text-gray-500 sm:text-sm">$</span>
-                        </div>
-                        <input
-                          type="number"
-                          name="product.price"
-                          id="product.price"
-                          required
-                          min="0"
-                          step="0.01"
-                          value={formData.product.price}
-                          onChange={handleChange}
-                          className="focus:ring-gantry-blue focus:border-gantry-blue block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label htmlFor="product.discountPercentage" className="block text-sm font-medium text-gray-700">
-                        Discount %
-                      </label>
-                      <div className="mt-1 relative rounded-md shadow-sm">
-                        <input
-                          type="number"
-                          name="product.discountPercentage"
-                          id="product.discountPercentage"
-                          required
-                          min="0"
-                          max="100"
-                          value={formData.product.discountPercentage}
-                          onChange={handleChange}
-                          className="focus:ring-gantry-blue focus:border-gantry-blue block w-full pr-8 sm:text-sm border-gray-300 rounded-md"
-                        />
-                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                          <span className="text-gray-500 sm:text-sm">%</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-4 py-3 bg-gray-50 text-right sm:px-6">
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-gantry-blue hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gantry-blue disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Creating...' : 'Create Group'}
-                </button>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Max Members Input */}
+            <div>
+              <label htmlFor="maxMembers" className="block text-sm font-medium mb-1">
+                Maximum Members
+              </label>
+              <Input
+                type="number"
+                id="maxMembers"
+                name="maxMembers"
+                value={formData.maxMembers}
+                onChange={handleChange}
+                className={errors.maxMembers ? "border-red-500" : ""}
+                min={2}
+                max={100}
+              />
+              {errors.maxMembers && (
+                <p className="text-sm text-red-500 mt-1">{errors.maxMembers}</p>
+              )}
             </div>
-          </form>
-        </div>
+
+            {/* Target Amount Input */}
+            <div>
+              <label htmlFor="targetAmount" className="block text-sm font-medium mb-1">
+                Target Amount ($)
+              </label>
+              <Input
+                type="number"
+                id="targetAmount"
+                name="targetAmount"
+                value={formData.targetAmount}
+                onChange={handleChange}
+                className={errors.targetAmount ? "border-red-500" : ""}
+                min={0}
+                max={1000000}
+                step="0.01"
+              />
+              {errors.targetAmount && (
+                <p className="text-sm text-red-500 mt-1">{errors.targetAmount}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Expiry Date Input */}
+          <div>
+            <label htmlFor="expiryDate" className="block text-sm font-medium mb-1">
+              Expiry Date
+            </label>
+            <Input
+              type="datetime-local"
+              id="expiryDate"
+              name="expiryDate"
+              value={formData.expiryDate}
+              onChange={handleChange}
+              className={errors.expiryDate ? "border-red-500" : ""}
+              min={new Date().toISOString().slice(0, 16)}
+            />
+            {errors.expiryDate && (
+              <p className="text-sm text-red-500 mt-1">{errors.expiryDate}</p>
+            )}
+          </div>
+
+          {/* Image URL Input */}
+          <div>
+            <label htmlFor="image" className="block text-sm font-medium mb-1">
+              Image URL (Optional)
+            </label>
+            <Input
+              id="image"
+              name="image"
+              value={formData.image}
+              onChange={handleChange}
+              className={errors.image ? "border-red-500" : ""}
+              placeholder="Enter image URL"
+            />
+            {errors.image && (
+              <p className="text-sm text-red-500 mt-1">{errors.image}</p>
+            )}
+          </div>
+
+          {/* Rules Section */}
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-medium">
+                Rules (Optional)
+              </label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addRule}
+                disabled={formData.rules.length >= 10}
+              >
+                Add Rule
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {formData.rules.map((rule, index) => (
+                <div key={index} className="flex gap-2">
+                  <Input
+                    value={rule}
+                    onChange={(e) => updateRule(index, e.target.value)}
+                    placeholder={`Rule ${index + 1}`}
+                    maxLength={200}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeRule(index)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            {errors.rules && (
+              <p className="text-sm text-red-500 mt-1">{errors.rules}</p>
+            )}
+          </div>
+
+          {/* Submit Button */}
+          <div className="flex justify-end">
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full md:w-auto"
+            >
+              {isSubmitting ? 'Creating...' : 'Create Group'}
+            </Button>
+          </div>
+        </form>
       </div>
     </div>
   );

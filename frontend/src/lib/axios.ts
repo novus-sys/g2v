@@ -8,8 +8,8 @@ const getApiUrl = () => {
     return 'https://your-backend-url.vercel.app/api';
   }
   
-  // In development, always use localhost:5000
-  return 'http://localhost:5000/api';
+  // In development, always use localhost:5001
+  return 'http://localhost:5001/api';
 };
 
 const api = axios.create({
@@ -25,7 +25,7 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('accessToken');
-    if (token) {
+    if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -54,6 +54,10 @@ api.interceptors.response.use(
 
       try {
         const refreshToken = localStorage.getItem('refreshToken');
+        if (!refreshToken) {
+          throw new Error('No refresh token available');
+        }
+
         const response = await axios.post(`${getApiUrl()}/auth/refresh-token`, {
           refreshToken,
         });
@@ -61,13 +65,19 @@ api.interceptors.response.use(
         const { accessToken } = response.data;
         localStorage.setItem('accessToken', accessToken);
 
+        // Update the failed request with the new token
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
-        // If refresh token fails, redirect to login
+        // If refresh token fails, clear all tokens and redirect to login
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
-        window.location.href = '/signin';
+        
+        // Only redirect if we're not already on the signin page
+        if (!window.location.pathname.includes('/signin')) {
+          window.location.href = '/signin';
+        }
+        
         return Promise.reject({
           message: 'Session expired - please sign in again',
         });
