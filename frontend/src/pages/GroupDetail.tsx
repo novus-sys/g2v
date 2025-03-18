@@ -14,6 +14,14 @@ import axios from "../lib/axios";
 import { useAuth } from "../hooks/useAuth";
 import { Button } from "../components/ui/button";
 import { useToast } from "../components/ui/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "../components/ui/dialog";
+import { Input } from "../components/ui/input";
 
 interface Group {
   _id: string;
@@ -41,6 +49,19 @@ interface Group {
   rules: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+interface Contribution {
+  _id: string;
+  contributor: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  amount: number;
+  status: "pending" | "completed" | "failed";
+  createdAt: string;
 }
 
 function getRemainingTimeLabel(expiryDate: string): string {
@@ -75,6 +96,12 @@ const GroupDetail: React.FC = () => {
   const [group, setGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [contributions, setContributions] = useState<Contribution[]>([]);
+  const [isContributeDialogOpen, setIsContributeDialogOpen] = useState(false);
+  const [contributionAmount, setContributionAmount] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingContribution, setEditingContribution] =
+    useState<Contribution | null>(null);
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -96,6 +123,23 @@ const GroupDetail: React.FC = () => {
 
     fetchGroup();
   }, [id, toast]);
+
+  // Fetch contributions
+  useEffect(() => {
+    const fetchContributions = async () => {
+      if (!id) return;
+      try {
+        const response = await axios.get(`/contributions/group/${id}`);
+        setContributions(response.data.data);
+      } catch (err) {
+        console.error("Error fetching contributions:", err);
+      }
+    };
+
+    if (group?.status === "open") {
+      fetchContributions();
+    }
+  }, [id, group?.status]);
 
   const handleJoinGroup = async () => {
     if (!user) {
@@ -124,6 +168,69 @@ const GroupDetail: React.FC = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleContribute = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to contribute",
+        variant: "destructive",
+      });
+      navigate("/signin");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      if (editingContribution) {
+        // Update existing contribution
+        await axios.put(`/contributions/${editingContribution._id}`, {
+          amount: parseFloat(contributionAmount),
+        });
+        toast({
+          title: "Success",
+          description: "Contribution updated successfully!",
+        });
+      } else {
+        // Create new contribution
+        await axios.post("/contributions", {
+          groupId: id,
+          amount: parseFloat(contributionAmount),
+        });
+        toast({
+          title: "Success",
+          description: "Contribution added successfully!",
+        });
+      }
+
+      // Refresh group data and contributions
+      const [groupResponse, contributionsResponse] = await Promise.all([
+        axios.get(`/groups/${id}`),
+        axios.get(`/contributions/group/${id}`),
+      ]);
+
+      setGroup(groupResponse.data);
+      setContributions(contributionsResponse.data.data);
+      setIsContributeDialogOpen(false);
+      setContributionAmount("");
+      setEditingContribution(null);
+    } catch (err: unknown) {
+      toast({
+        title: "Error",
+        description:
+          err instanceof Error ? err.message : "Failed to process contribution",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEditContribution = (contribution: Contribution) => {
+    setEditingContribution(contribution);
+    setContributionAmount(contribution.amount.toString());
+    setIsContributeDialogOpen(true);
   };
 
   if (loading) {
@@ -156,8 +263,17 @@ const GroupDetail: React.FC = () => {
     );
   }
 
-  const isMember = group.members.some((member) => member._id === user?._id);
-  const isCreator = group.creator._id === user?._id;
+  const isMember = group.members.some((member) => member.email === user?.email);
+  const isCreator = group.creator.email === user?.email;
+
+  console.log("Debug Info:", {
+    userEmail: user?.email,
+    memberEmails: group.members.map((m) => m.email),
+    creatorEmail: group.creator.email,
+    isMember,
+    isCreator,
+    groupStatus: group.status,
+  });
 
   return (
     <div className="container px-4 py-6 max-w-screen-xl mx-auto mb-20">
@@ -272,7 +388,7 @@ const GroupDetail: React.FC = () => {
             )}
 
             <div className="flex gap-4">
-              {group.status === "open" && !isMember && !isCreator && (
+              {group.status === "open" && !isMember && (
                 <Button
                   className="flex-1 bg-gantry-purple hover:bg-gantry-purple-dark"
                   onClick={handleJoinGroup}
@@ -281,10 +397,24 @@ const GroupDetail: React.FC = () => {
                   Join Group
                 </Button>
               )}
+
+              {group.status === "open" && isMember && (
+                <Button
+                  className="flex-1 bg-gantry-purple hover:bg-gantry-purple-dark"
+                  onClick={() => {
+                    setEditingContribution(null);
+                    setContributionAmount("");
+                    setIsContributeDialogOpen(true);
+                  }}
+                >
+                  <DollarSign className="w-4 h-4 mr-2" />
+                  Contribute
+                </Button>
+              )}
+
               <Button
                 className="flex-1 bg-white border border-gantry-gray hover:bg-gantry-gray/5"
                 onClick={() => {
-                  // TODO: Implement chat functionality
                   toast({
                     title: "Coming Soon",
                     description: "Chat functionality will be available soon!",
@@ -295,9 +425,111 @@ const GroupDetail: React.FC = () => {
                 Chat
               </Button>
             </div>
+
+            {/* Contribute Dialog */}
+            <Dialog
+              open={isContributeDialogOpen}
+              onOpenChange={setIsContributeDialogOpen}
+            >
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingContribution
+                      ? "Update Contribution"
+                      : "Contribute to Group"}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {editingContribution
+                      ? "Update your contribution amount for this group."
+                      : "Enter the amount you want to contribute to this group."}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="amount"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Amount ($)
+                    </label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={contributionAmount}
+                      onChange={(e) => setContributionAmount(e.target.value)}
+                      placeholder="Enter amount"
+                    />
+                  </div>
+                  <Button
+                    className="w-full bg-gantry-purple hover:bg-gantry-purple-dark"
+                    onClick={handleContribute}
+                    disabled={
+                      isSubmitting ||
+                      !contributionAmount ||
+                      parseFloat(contributionAmount) <= 0
+                    }
+                  >
+                    {isSubmitting ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    ) : editingContribution ? (
+                      "Update"
+                    ) : (
+                      "Contribute"
+                    )}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </div>
+
+      {/* Contributions Section */}
+      {contributions.length > 0 && (
+        <div className="mt-8 bg-white rounded-2xl p-6 border border-gantry-gray/20 shadow-md">
+          <h2 className="text-xl font-bold mb-4">Contributions</h2>
+          <div className="space-y-4">
+            {contributions.map((contribution) => (
+              <div
+                key={contribution._id}
+                className="flex items-center justify-between p-3 bg-gantry-gray/5 rounded-lg"
+              >
+                <div className="flex items-center">
+                  <div className="w-10 h-10 rounded-full bg-gantry-purple/10 flex items-center justify-center text-gantry-purple font-semibold">
+                    {contribution.contributor.firstName[0]}
+                    {contribution.contributor.lastName[0]}
+                  </div>
+                  <div className="ml-3">
+                    <p className="font-medium">
+                      {contribution.contributor.firstName}{" "}
+                      {contribution.contributor.lastName}
+                    </p>
+                    <p className="text-sm text-gantry-gray-dark">
+                      {new Date(contribution.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-lg font-bold text-gantry-purple">
+                    ${contribution.amount.toFixed(2)}
+                  </div>
+                  {contribution.contributor.email === user?.email && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEditContribution(contribution)}
+                    >
+                      Edit
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Members Section */}
       <div className="mt-8 bg-white rounded-2xl p-6 border border-gantry-gray/20 shadow-md">

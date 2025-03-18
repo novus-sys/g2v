@@ -8,6 +8,7 @@ import connectDB from "./config/db";
 import userRoutes from "./routes/userRoutes";
 import groupRoutes from "./routes/groupRoutes";
 import authRoutes from "./routes/auth.routes";
+import contributionRoutes from "./routes/contributionRoutes";
 
 // Load environment variables
 dotenv.config();
@@ -60,6 +61,7 @@ app.use(limiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/groups", groupRoutes);
+app.use("/api/contributions", contributionRoutes);
 
 // Error handling middleware
 app.use(
