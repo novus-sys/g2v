@@ -20,7 +20,7 @@ const router = Router();
 
 // Group routes
 router.get('/', auth, getGroups);
-router.post('/', auth, validateRequest(groupSchema), createGroup);
+router.post('/',auth, createGroup);
 router.get('/:id', auth, getGroup);
 router.put('/:id', auth, validateRequest(groupSchema), updateGroup);
 router.delete('/:id', auth, deleteGroup);
